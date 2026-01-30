@@ -8,7 +8,7 @@ Mattermost recommendations for infrastructure sizing are here - https://docs.mat
 
 ## Core Components
 
--   **PostgreSQL 16**: The database engine.  Latest LTS release.
+-   **PostgreSQL 17**: The database engine.
 -   **repmgr 5.5**: Replication manager for failover and cluster monitoring.
 -   **HAProxy 2.8**: TCP load balancer routing traffic to Primary (writes) and Standbys (reads).
 -   **Keepalived 2.x**: Manages the Virtual IP (VIP) to ensure high availability of the entry point.

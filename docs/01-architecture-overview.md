@@ -25,6 +25,10 @@ This document describes a highly available PostgreSQL deployment using **repmgr*
          └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
+## Sizing Guidelines
+
+For infrastructure sizing recommendations, please refer to the [Mattermost Scaling Guide](https://docs.mattermost.com/administration-guide/scale/scale-to-2000-users.html). This architecture is designed to support deployments up to approximately 2,000 users.
+
 ## Components
 
 ### PostgreSQL 17

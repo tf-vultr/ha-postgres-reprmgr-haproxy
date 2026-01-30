@@ -247,6 +247,33 @@ curl -v http://localhost:8008/ready
 
 ---
 
+### Issue: Keepalived Enters FAULT State on Boot
+
+**Symptoms:**
+- Keepalived starts but immediately enters FAULT state
+- Logs show `Cannot assign requested address` for the unicast IP
+- VIP is not acquired automatically on reboot
+
+**Cause:**
+In virtualized environments (like Multipass or cloud instances using DHCP), the network interface may not have fully acquired its IP address when Keepalived attempts to bind to it. The `After=network-online.target` directive is sometimes insufficient in these environments.
+
+**Solution:**
+Add a small startup delay to the Keepalived service.
+
+1. Create an override file:
+```bash
+sudo mkdir -p /etc/systemd/system/keepalived.service.d
+sudo bash -c 'printf "[Service]\nExecStartPre=/bin/sleep 5\n" > /etc/systemd/system/keepalived.service.d/override.conf'
+```
+
+2. Reload and restart:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart keepalived
+```
+
+---
+
 ### Issue: Split-Brain (Two Primaries)
 
 **Symptoms:**
@@ -387,7 +414,7 @@ ERROR: unable to connect to primary server
 psql -h <PRIMARY_IP> -U repmgr -d repmgr
 
 # Check pg_hba.conf on primary
-sudo cat /etc/postgresql/17/main/pg_hba.conf | grep repmgr
+sudo cat /etc/postgresql/16/main/pg_hba.conf | grep repmgr
 ```
 
 **Solutions:**
