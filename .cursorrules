@@ -1,0 +1,61 @@
+# Project Overview
+
+The goal of this project is to design a **PostgreSQL High Availability (HA)** cluster architecture suitable for **SMB/Mid-Market** businesses.
+This design prioritizes **risk mitigation**, **cost-effectiveness**, and **ease of maintenance** while meeting production Mattermost workload requirements.
+Mattermost recommendations for infrastructure sizing are here - https://docs.mattermost.com/administration-guide/scale/scale-to-2000-users.html (the 2000 users is a good estimate of the highest this solution is intended to serve)
+
+**Target Outcome**: This work will be published as an official guide on [docs.mattermost.com](https://docs.mattermost.com). All configurations and scripts should be production-ready and documented for external customers.
+
+## Core Components
+
+-   **PostgreSQL 16**: The database engine.  Latest LTS release.
+-   **repmgr 5.5**: Replication manager for failover and cluster monitoring.
+-   **HAProxy 2.8**: TCP load balancer routing traffic to Primary (writes) and Standbys (reads).
+-   **Keepalived 2.x**: Manages the Virtual IP (VIP) to ensure high availability of the entry point.
+-   **pgchk.py**: Custom Python script (port 8008) providing HTTP health checks for HAProxy.
+
+## Architecture Guidelines
+
+-   **Topology**: 3-node cluster (1 Primary, 2 Standbys).
+-   **Routing**:
+    -   All application traffic MUST connect via the **VIP**.
+    -   **Port 5000**: Write traffic (routes to Primary).
+    -   **Port 5001**: Read traffic (routes to Standbys).
+    -   **Port 8008**: Health checks.
+-   **Failover Strategy**:
+    -   **Automatic Failover**: Handled by `repmgrd`.
+    -   **Read Scaling**: HAProxy distributes read connection.
+    -   **VIP Management**: Keepalived ensures the VIP is always on a healthy node.
+
+## Development Rules
+
+1.  **NEVER** git commit code automatically. Always ask for confirmation.
+2.  **Generalization**: Avoid hardcoding IP addresses or environment-specific values in documentation and examples. Use placeholders like `<VIP>`, `<PRIMARY_IP>`, `<NODE_1_IP>`, etc.
+3.  **Documentation First**: Changes to architecture or commands must be reflected in the `docs/` folder.
+4.  **Scripts**:
+    -   Python scripts (like `pgchk.py`) should be robust, consistent, and error-handled.
+    -   Bash scripts should be executable and have clear usage instructions.
+
+## Key Commands (Reference)
+
+### Check Status
+```bash
+# Cluster Status
+sudo -u postgres repmgr -f /etc/repmgr.conf cluster show
+
+# Service Status
+sudo systemctl status postgresql repmgrd pgchk haproxy keepalived
+
+# VIP Location
+ip addr show | grep <VIP>
+```
+
+### Failover & Recovery
+```bash
+# Planned Switchover (run from the standby you want to promote)
+sudo -u postgres repmgr standby switchover -f /etc/repmgr.conf --siblings-follow
+
+# Rejoin Failed Node (using pg_rewind)
+sudo systemctl stop postgresql
+sudo -u postgres repmgr node rejoin -f /etc/repmgr.conf -d 'host=<PRIMARY_IP> dbname=repmgr user=repmgr' --force-rewind
+```
