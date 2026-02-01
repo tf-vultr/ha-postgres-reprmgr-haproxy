@@ -56,6 +56,14 @@ ip addr show | grep <VIP>
 sudo -u postgres repmgr standby switchover -f /etc/repmgr.conf --siblings-follow
 
 # Rejoin Failed Node (using pg_rewind)
-sudo systemctl stop postgresql
 sudo -u postgres repmgr node rejoin -f /etc/repmgr.conf -d 'host=<PRIMARY_IP> dbname=repmgr user=repmgr' --force-rewind
 ```
+
+## Terraform & Infrastructure Rules
+
+1.  **Persistence & Upgrades**: When performing major version upgrades (e.g., Postgres 16 -> 17) or significant `user_data` logic changes, **ALWAYS** taint the compute and storage resources (`terraform taint`) to ensure a clean slate. In-place updates often fail to re-bootstrap stateful components.
+2.  **Shell Safety**: Use **alphanumeric-only** strings for infrastructure credentials (passwords) passed to `user_data`. Special characters (like `!`) cause shell escaping issues during cloud-init.
+3.  **Connectivity**:
+    -   Default Load Balancers and Services to **internal** for security.
+    -   If external access is required (e.g., for debugging from a laptop), explicitly set `internal = false` and ensure `admin_cidr` is strictly scoped to the user's IP.
+4.  **Terraform Hygiene**: For `aws_instance` resources relying on `user_data`, set `user_data_replace_on_change = true` to force replacement when bootstrap scripts change.
