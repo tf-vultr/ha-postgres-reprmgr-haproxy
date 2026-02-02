@@ -4,13 +4,13 @@ resource "aws_lb" "ha_postgres" {
   name               = "ha-postgres-nlb"
   internal           = false # Critical: Allow external access for user's laptop
   load_balancer_type = "network"
-  subnets            = data.aws_subnets.default.ids
+  subnets            = local.selected_subnets
 
   enable_cross_zone_load_balancing = true
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "ha-postgres-nlb"
-  }
+  })
 }
 
 # --- Target Groups ---

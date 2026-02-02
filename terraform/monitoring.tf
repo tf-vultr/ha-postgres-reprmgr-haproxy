@@ -39,9 +39,9 @@ resource "aws_security_group" "monitor_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "ha-postgres-monitor-sg"
-  }
+  })
 }
 
 resource "aws_instance" "monitor" {
@@ -49,15 +49,15 @@ resource "aws_instance" "monitor" {
   instance_type = "t3.small" # Slightly larger for Docker stack
   key_name      = aws_key_pair.admin_key.key_name
 
-  subnet_id                   = data.aws_subnets.default.ids[0] # Just put it in the first subnet
+  subnet_id                   = local.selected_subnets[0] # Just put it in the first subnet
   vpc_security_group_ids      = [aws_security_group.monitor_sg.id]
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.db_profile.name # Re-use role for EC2 Discovery
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "ha-postgres-monitor"
     Role = "monitor-node"
-  }
+  })
 
   user_data = templatefile("${path.module}/templates/user_data_monitor.sh.tpl", {
     # Variables if needed

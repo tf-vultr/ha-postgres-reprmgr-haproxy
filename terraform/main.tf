@@ -17,14 +17,32 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default" {
+data "aws_subnets" "all" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
   filter {
-    name   = "availability-zone"
-    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"] # Explicitly exclude 1e
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
+data "aws_subnet" "details" {
+  for_each = toset(data.aws_subnets.all.ids)
+  id       = each.value
+}
+
+locals {
+  # Group subnet IDs by AZ
+  subnets_by_az = {
+    for s in data.aws_subnet.details : s.availability_zone => s.id...
+  }
+  # Pick one subnet per AZ
+  selected_subnets = values({for az, ids in local.subnets_by_az : az => ids[0]})
+  
+  common_tags = {
+    Project = var.project_name
   }
 }
 

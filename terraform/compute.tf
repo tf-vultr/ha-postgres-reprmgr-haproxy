@@ -19,7 +19,7 @@ resource "aws_instance" "primary" {
   instance_type = var.instance_type
   key_name      = aws_key_pair.admin_key.key_name
 
-  subnet_id                   = data.aws_subnets.default.ids[0]
+  subnet_id                   = local.selected_subnets[0]
   vpc_security_group_ids      = [aws_security_group.db_nodes.id]
   associate_public_ip_address = true
 
@@ -28,11 +28,11 @@ resource "aws_instance" "primary" {
     volume_type = "gp3"
   }
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "pg1"
     Role = "postgres-node"
-    NodeID = "1"
-  }
+    NodeID = 1
+  })
 
   iam_instance_profile = aws_iam_instance_profile.db_profile.name
   user_data_replace_on_change = true
@@ -48,7 +48,7 @@ resource "aws_instance" "primary" {
     postgres_password = var.db_password
     monitor_password = var.monitor_password
     mm_password     = var.mm_password
-    vpc_cidr        = data.aws_vpc.default.cidr_block
+    vpc_cidrs       = join(",", [for assoc in data.aws_vpc.default.cidr_block_associations : assoc.cidr_block])
   })
 }
 
@@ -59,7 +59,7 @@ resource "aws_instance" "standbys" {
   instance_type = var.instance_type
   key_name      = aws_key_pair.admin_key.key_name
 
-  subnet_id                   = data.aws_subnets.default.ids[count.index + 1]
+  subnet_id                   = local.selected_subnets[count.index + 1]
   vpc_security_group_ids      = [aws_security_group.db_nodes.id]
   associate_public_ip_address = true
 
@@ -68,11 +68,11 @@ resource "aws_instance" "standbys" {
     volume_type = "gp3"
   }
 
-  tags = {
+  tags = merge(local.common_tags, {
     Name = "pg${count.index + 2}"
     Role = "postgres-node"
     NodeID = count.index + 2
-  }
+  })
 
   iam_instance_profile = aws_iam_instance_profile.db_profile.name
   user_data_replace_on_change = true
@@ -88,6 +88,6 @@ resource "aws_instance" "standbys" {
     postgres_password = var.db_password
     monitor_password = var.monitor_password
     mm_password     = var.mm_password
-    vpc_cidr        = data.aws_vpc.default.cidr_block
+    vpc_cidrs       = join(",", [for assoc in data.aws_vpc.default.cidr_block_associations : assoc.cidr_block])
   })
 }

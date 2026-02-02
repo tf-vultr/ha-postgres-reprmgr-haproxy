@@ -51,3 +51,8 @@ variable "mm_password" {
   default     = "SausageBacon123"
   sensitive   = true
 }
+
+variable "project_name" {
+  description = "Tag to identify the project owner/name"
+  type        = string
+}

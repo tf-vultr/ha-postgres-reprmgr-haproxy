@@ -1,14 +1,17 @@
 # --- Dedicated EBS Volumes for Postgres Data ---
 
 
-# Data source to get subnet details (specifically AZ) from the filtered list in main.tf
-data "aws_subnet" "selected" {
-  count = 3
-  id    = data.aws_subnets.default.ids[count.index]
+# Data source to get subnet details (specifically AZ) from the filtered list (local.selected_subnets)
+# We need to map the subnet ID back to an AZ. We can use data.aws_subnet again or just rely on the fact 
+# that we picked them. But aws_ebs_volume needs AZ.
+# Easiest is to lookup each selected subnet.
+
+data "aws_subnet" "selected_primary" {
+  id = local.selected_subnets[0]
 }
 
 resource "aws_ebs_volume" "primary_data" {
-  availability_zone = data.aws_subnet.selected[0].availability_zone
+  availability_zone = data.aws_subnet.selected_primary.availability_zone
   size              = 50
   type              = "gp3"
 
@@ -23,9 +26,14 @@ resource "aws_volume_attachment" "primary_data_attach" {
   instance_id = aws_instance.primary.id
 }
 
+data "aws_subnet" "selected_standby" {
+  count = 2
+  id    = local.selected_subnets[count.index + 1]
+}
+
 resource "aws_ebs_volume" "standby_data" {
   count             = 2
-  availability_zone = data.aws_subnet.selected[count.index + 1].availability_zone
+  availability_zone = data.aws_subnet.selected_standby[count.index].availability_zone
   size              = 50
   type              = "gp3"
 

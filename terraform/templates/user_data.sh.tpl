@@ -88,12 +88,20 @@ shared_preload_libraries = 'repmgr'
 wal_log_hints = on
 EOF
 
-HBA_CONF="/etc/postgresql/17/main/pg_hba.conf"
-cat >> $HBA_CONF <<EOF
-host    repmgr          repmgr          ${vpc_cidr}         trust
-host    replication     repmgr          ${vpc_cidr}         trust
-host    all             all             ${vpc_cidr}         md5
+
+	HBA_CONF="/etc/postgresql/17/main/pg_hba.conf"
+	
+	# Split comma-separated CIDRs and add rules for each
+	IFS=',' read -ra CIDRS <<< "${vpc_cidrs}"
+	for cidr in "$${CIDRS[@]}"; do
+	  echo "Adding pg_hba.conf rules for CIDR: $cidr"
+	  cat >> $HBA_CONF <<-EOF
+host    repmgr          repmgr          $cidr         trust
+host    replication     repmgr          $cidr         trust
+host    all             all             $cidr         md5
 EOF
+	done
+
 
 # --- 4. Role Logic ---
 echo "Determining Role..."
@@ -345,6 +353,7 @@ frontend stats
     stats enable
     stats uri /stats
     stats refresh 10s
+EOF
 
 # Install Exporters
 apt-get install -y prometheus-node-exporter prometheus-postgres-exporter
@@ -356,7 +365,6 @@ EOF
 
 systemctl restart prometheus-node-exporter
 systemctl restart prometheus-postgres-exporter
-EOF
 
 systemctl restart haproxy
 
