@@ -119,6 +119,7 @@ if [ "$NODE_ID" == "1" ]; then
     done
     
     # Setup DB
+    sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${postgres_password}';"
     sudo -u postgres psql -c "CREATE USER repmgr WITH SUPERUSER ENCRYPTED PASSWORD '${repmgr_password}';"
     sudo -u postgres createdb repmgr -O repmgr
     sudo -u postgres psql -c "ALTER USER repmgr SET search_path TO repmgr, public;"
@@ -358,10 +359,7 @@ EOF
 # Install Exporters
 apt-get install -y prometheus-node-exporter prometheus-postgres-exporter
 
-# Configure Postgres Exporter
-cat > /etc/default/prometheus-postgres-exporter <<EOF
-DATA_SOURCE_NAME="user=postgres host=/var/run/postgresql/ sslmode=disable"
-EOF
+
 
 systemctl restart prometheus-node-exporter
 systemctl restart prometheus-postgres-exporter
