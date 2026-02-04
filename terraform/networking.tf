@@ -17,9 +17,10 @@ resource "aws_lb" "ha_postgres" {
 
 # 1. Write Target Group (Port 5000) -> Master
 resource "aws_lb_target_group" "pg_write" {
-  name     = "ha-postgres-write-tg"
+  name     = "ha-postgres-write-tg-tcp"
   port     = 5000
-  protocol = "TCP_UDP"
+  protocol = "TCP"
+  preserve_client_ip = "false"
   vpc_id   = data.aws_vpc.default.id
 
   health_check {
@@ -38,9 +39,10 @@ resource "aws_lb_target_group" "pg_write" {
 
 # 2. Read Target Group (Port 5001) -> Replicas
 resource "aws_lb_target_group" "pg_read" {
-  name     = "ha-postgres-read-tg"
+  name     = "ha-postgres-read-tg-tcp"
   port     = 5001
-  protocol = "TCP_UDP"
+  protocol = "TCP"
+  preserve_client_ip = "false"
   vpc_id   = data.aws_vpc.default.id
 
   health_check {
@@ -62,7 +64,7 @@ resource "aws_lb_target_group" "pg_read" {
 resource "aws_lb_listener" "pg_write" {
   load_balancer_arn = aws_lb.ha_postgres.arn
   port              = 5000
-  protocol          = "TCP_UDP"
+  protocol          = "TCP"
 
   default_action {
     type             = "forward"
@@ -73,7 +75,7 @@ resource "aws_lb_listener" "pg_write" {
 resource "aws_lb_listener" "pg_read" {
   load_balancer_arn = aws_lb.ha_postgres.arn
   port              = 5001
-  protocol          = "TCP_UDP"
+  protocol          = "TCP"
 
   default_action {
     type             = "forward"

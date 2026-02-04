@@ -56,3 +56,9 @@ variable "project_name" {
   description = "Tag to identify the project owner/name"
   type        = string
 }
+
+variable "extra_security_group_ids" {
+  description = "List of additional security group IDs to attach to the database instances"
+  type        = list(string)
+  default     = []
+}

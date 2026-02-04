@@ -124,3 +124,14 @@ resource "aws_security_group" "db_nodes" {
     Name = "ha-postgres-db-sg"
   })
 }
+
+resource "aws_security_group_rule" "allow_extra_sgs" {
+  count             = length(var.extra_security_group_ids)
+  type              = "ingress"
+  from_port         = 5000
+  to_port           = 5001
+  protocol          = "tcp"
+  source_security_group_id = var.extra_security_group_ids[count.index]
+  security_group_id = aws_security_group.db_nodes.id
+  description       = "Allow traffic from extra SGs (e.g. Mattermost)"
+}
