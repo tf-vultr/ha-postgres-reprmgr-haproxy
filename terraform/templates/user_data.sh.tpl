@@ -56,6 +56,33 @@ echo "postgres ALL=(ALL) NOPASSWD: /usr/bin/pg_ctlcluster" > /etc/sudoers.d/post
 # Configure Postgres Exporter
 cat > /etc/default/prometheus-postgres-exporter <<EOF
 DATA_SOURCE_NAME="postgresql://postgres_exporter:${monitor_password}@localhost:5432/postgres?sslmode=disable"
+PG_EXPORTER_EXTEND_QUERY_PATH="/etc/postgres-exporter/metrics_queries.yaml"
+EOF
+
+# Create Custom Queries for Lag Analysis
+mkdir -p /etc/postgres-exporter
+cat > /etc/postgres-exporter/metrics_queries.yaml <<EOF
+pg_replication_lag_detailed:
+  query: "SELECT client_addr, application_name, state, EXTRACT(EPOCH FROM write_lag) as write_lag_seconds, EXTRACT(EPOCH FROM flush_lag) as flush_lag_seconds, EXTRACT(EPOCH FROM replay_lag) as replay_lag_seconds FROM pg_stat_replication"
+  metrics:
+    - client_addr:
+        usage: "LABEL"
+        description: "Replica Address"
+    - application_name:
+        usage: "LABEL"
+        description: "Replica Application Name"
+    - state:
+        usage: "LABEL"
+        description: "Replica State"
+    - write_lag_seconds:
+        usage: "GAUGE"
+        description: "Time waiting for WAL to be sent"
+    - flush_lag_seconds:
+        usage: "GAUGE"
+        description: "Time waiting for WAL to be flushed to disk"
+    - replay_lag_seconds:
+        usage: "GAUGE"
+        description: "Time waiting for WAL to be replayed"
 EOF
 systemctl restart prometheus-postgres-exporter
 
