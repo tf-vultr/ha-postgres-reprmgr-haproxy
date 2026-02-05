@@ -3,7 +3,7 @@
 * THink about the connection settings.  Does HAProxy's configuration we're documenting need to account for what we're telling the customer for Mattermost `SqlSettings` (in terms of MaxConns, MaxOpenConns, timeouts, etc.)
 * Should PGBouncer play a role here?
 * Need to test this setup line "> **Note**: For production, replace `trust` with `scram-sha-256` and configure `.pgpass` files."  I don't know what a .pgpass is.
-
+* What are the steps to add a completely new node to the cluster (lets say the original VM can't be restarted... we have to kinda repeat the oirinal setup steps)
 # Optimizations
 * VIP Follows Primary - Make Keepalived track PostgreSQL primary role so VIP moves to the DB primary node
   * Reduces inter-node latency (important for realtime workloads with no cluster affinity)
@@ -22,6 +22,6 @@
 
 # Validation
 * Load Test
- * Setup Mattermost server to point to multipass cluster
- * Setup mattermost-loadtest-ng project to generate load and monitor
- * Test failure conditions
+ * XSetup Mattermost server to point to multipass cluster
+ * XSetup mattermost-loadtest-ng project to generate load and monitor
+ * INPROGRESS Test failure conditions

@@ -117,6 +117,8 @@ archive_mode = on
 archive_command = '/bin/true'
 shared_preload_libraries = 'repmgr'
 wal_log_hints = on
+wal_keep_size = 1024
+
 EOF
 
 
@@ -172,6 +174,8 @@ if [ "$NODE_ID" == "1" ]; then
 node_id=1
 node_name='pg1'
 conninfo='host=$(hostname -I | awk "{print \$1}") user=repmgr dbname=repmgr connect_timeout=2'
+pg_bindir='/usr/lib/postgresql/17/bin'
+
 data_directory='/var/lib/postgresql/17/main'
 use_replication_slots=yes
 service_start_command='sudo /usr/bin/pg_ctlcluster 17 main start'
@@ -205,6 +209,8 @@ else
 node_id=$NODE_ID
 node_name='pg$NODE_ID'
 conninfo='host=$(hostname -I | awk "{print \$1}") user=repmgr dbname=repmgr connect_timeout=2'
+pg_bindir='/usr/lib/postgresql/17/bin'
+
 ssh_options='-o StrictHostKeyChecking=no'
 data_directory='/var/lib/postgresql/17/main'
 use_replication_slots=yes
@@ -232,6 +238,10 @@ EOF
 fi
 
 # Enable Repmgrd
+# Configure defaults file to allow startup
+sed -i 's/REPMGRD_ENABLED=no/REPMGRD_ENABLED=yes/' /etc/default/repmgrd
+sed -i 's|#REPMGRD_CONF=.*|REPMGRD_CONF=/etc/repmgr.conf|' /etc/default/repmgrd
+
 cat > /etc/systemd/system/repmgrd.service <<EOF
 [Unit]
 Description=repmgr daemon

@@ -92,7 +92,9 @@ shared_preload_libraries = 'repmgr'
 
 # Required for pg_rewind (faster node rejoin)
 wal_log_hints = on
+wal_keep_size = 1024
 ```
+
 
 ### 2.2 Configure pg_hba.conf
 
@@ -142,6 +144,7 @@ data_directory='/var/lib/postgresql/17/main'
 use_replication_slots=yes
 monitoring_history=yes
 log_level=INFO
+pg_bindir='/usr/lib/postgresql/17/bin'
 
 # Service commands
 service_start_command='sudo /usr/bin/pg_ctlcluster 17 main start'
