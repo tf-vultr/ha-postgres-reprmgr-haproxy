@@ -2,7 +2,7 @@
 
 resource "aws_lb" "ha_postgres" {
   name               = "ha-postgres-nlb"
-  internal           = false # Critical: Allow external access for user's laptop
+  internal           = true # Critical: Allow external access for user's laptop
   load_balancer_type = "network"
   subnets            = local.selected_subnets
 

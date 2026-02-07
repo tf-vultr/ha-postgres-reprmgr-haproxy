@@ -21,8 +21,8 @@ output "ssh_access" {
 output "database_endpoints" {
   description = "Connection strings for Postgres (Admin/Write and Read)"
   value = {
-    "primary_write" = nonsensitive("postgres://postgres:${var.db_password}@${aws_lb.ha_postgres.dns_name}:5000/postgres")
-    "read_replicas" = nonsensitive("postgres://postgres:${var.db_password}@${aws_lb.ha_postgres.dns_name}:5001/postgres")
+    "primary_write" = nonsensitive("postgres://mmuser:${var.mm_password}@${aws_lb.ha_postgres.dns_name}:5000/mattermost")
+    "read_replicas" = nonsensitive("postgres://mmuser:${var.mm_password}@${aws_lb.ha_postgres.dns_name}:5001/mattermost")
   }
   sensitive = false
 }

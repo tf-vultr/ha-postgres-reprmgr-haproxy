@@ -32,6 +32,15 @@ resource "aws_security_group" "monitor_sg" {
     cidr_blocks = [var.admin_cidr]
   }
 
+  ingress {
+    description = "Loki Log Ingestion"
+    from_port   = 3100
+    to_port     = 3100
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.default.cidr_block]
+  }
+
+
   egress {
     from_port   = 0
     to_port     = 0

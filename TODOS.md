@@ -10,6 +10,7 @@
   * Implementation: Add `check_primary.sh` script using `/master` endpoint with high weight in Keepalived
   * Trade-off: VIP moves on every DB failover (not just node failures)
 * Loki for log aggregation
+* Available disk space monitoring
 
 # Future Work: Infrastructure & Scale
 * **AWS HA Postgres Design (Terraform)**:

@@ -71,3 +71,4 @@ sudo -u postgres repmgr node rejoin -f /etc/repmgr.conf -d 'host=<PRIMARY_IP> db
     -   Default Load Balancers and Services to **internal** for security.
     -   If external access is required (e.g., for debugging from a laptop), explicitly set `internal = false` and ensure `admin_cidr` is strictly scoped to the user's IP.
 4.  **Terraform Hygiene**: For `aws_instance` resources relying on `user_data`, set `user_data_replace_on_change = true` to force replacement when bootstrap scripts change.
+5. **AWS Profile**: Always setup AWS_PROFILE environment variable for AWS operations.

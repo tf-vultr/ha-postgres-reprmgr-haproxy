@@ -541,7 +541,14 @@ Execute on all database nodes (`pg1`, `pg2`, `pg3`):
 sudo apt install -y prometheus-node-exporter
 
 # Install Prometheus Postgres Exporter (DB Metrics)
-sudo apt install -y prometheus-postgres-exporter
+# Note: Manually install v0.19.0+ for PostgreSQL 17 compatibility
+wget -q https://github.com/prometheus-community/postgres_exporter/releases/download/v0.19.0/postgres_exporter-0.19.0.linux-amd64.tar.gz
+tar xf postgres_exporter-0.19.0.linux-amd64.tar.gz
+sudo cp postgres_exporter-0.19.0.linux-amd64/postgres_exporter /usr/bin/prometheus-postgres-exporter
+
+# Create systemd service if not present (apt usually creates this, but manual install does not)
+# If upgrading from apt version, simply restart the service:
+# sudo systemctl restart prometheus-postgres-exporter
 ```
 
 ### 8.2 Configure Postgres Exporter

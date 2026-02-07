@@ -41,6 +41,17 @@ chown -R postgres:postgres /var/lib/postgresql
 # Specific version pinning to avoid pulling in default OS version (like 16)
 DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-17 postgresql-17-repmgr haproxy python3-pip jq prometheus-node-exporter prometheus-postgres-exporter
 
+# Validating cluster... (skipped)
+
+# --- Patch Postgres Exporter for PG17 (apt version is too old) ---
+echo "Upgrading Postgres Exporter..."
+wget -q https://github.com/prometheus-community/postgres_exporter/releases/download/v0.19.0/postgres_exporter-0.19.0.linux-amd64.tar.gz
+tar xf postgres_exporter-0.19.0.linux-amd64.tar.gz
+systemctl stop prometheus-postgres-exporter
+cp postgres_exporter-0.19.0.linux-amd64/postgres_exporter /usr/bin/prometheus-postgres-exporter
+systemctl start prometheus-postgres-exporter
+# -----------------------------------------------------------------
+
 # Ensure cluster exists (sometimes initdb skips on pre-existing mount)
 if ! pg_lsclusters | grep -q "^17[[:space:]]\+main"; then
     echo "Manually creating cluster..."
@@ -118,6 +129,18 @@ archive_command = '/bin/true'
 shared_preload_libraries = 'repmgr'
 wal_log_hints = on
 wal_keep_size = 1024
+
+# Logging Tuning
+log_connections = off
+log_disconnections = off
+log_checkpoints = on
+log_lock_waits = on
+log_min_duration_statement = 1000
+logging_collector = on
+log_destination = 'jsonlog'
+log_directory = '/var/log/postgresql'
+log_filename = 'postgresql-%Y-%m-%d.log'
+log_file_mode = 0640
 
 EOF
 
@@ -377,8 +400,8 @@ defaults
     option  tcplog
     option  dontlognull
     timeout connect 5000
-    timeout client  50000
-    timeout server  50000
+    timeout client  600000
+    timeout server  600000
 
 listen postgres_write
     bind *:5000
