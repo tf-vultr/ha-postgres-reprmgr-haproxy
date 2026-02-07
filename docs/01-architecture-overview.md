@@ -7,7 +7,7 @@ This document describes a highly available PostgreSQL deployment using **repmgr*
 ## Architecture Diagram
 
 ```
-                         VIP: 192.168.87.100
+                         VIP: <CLUSTER_VIP>
                                 │
                 ┌───────────────┼───────────────┐
                 │               │               │
@@ -21,7 +21,7 @@ This document describes a highly available PostgreSQL deployment using **repmgr*
          ├─────────────┤ ├─────────────┤ ├─────────────┤
          │ PostgreSQL  │ │ PostgreSQL  │ │ PostgreSQL  │
          │   PRIMARY   │ │   STANDBY   │ │   STANDBY   │
-         │192.168.87.54│ │192.168.87.57│ │192.168.87.66│
+         │  <PG1_IP>   │ │  <PG2_IP>   │ │  <PG3_IP>   │
          └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
@@ -61,7 +61,7 @@ For infrastructure sizing recommendations, please refer to the [Mattermost Scali
 
 ### Keepalived
 - **Role**: Virtual IP (VIP) management using VRRP
-- **VIP**: 192.168.87.100
+- **VIP**: <CLUSTER_VIP>
 - **Mode**: Unicast (recommended for VMware/virtualized environments)
 - **Failover**: VIP moves to healthy node if current holder fails
 - **Health Check**: Uses `/ready` endpoint to verify PostgreSQL connectivity
@@ -71,11 +71,11 @@ For infrastructure sizing recommendations, please refer to the [Mattermost Scali
 
 | Purpose | Address | Port | Description |
 |---------|---------|------|-------------|
-| **Writes** | 192.168.87.100 | 5000 | Always routes to PRIMARY |
-| **Reads** | 192.168.87.100 | 5001 | Load balanced across STANDBYs (falls back to PRIMARY if all standbys down) |
-| **Direct pg1** | 192.168.87.54 | 5432 | Direct connection (not recommended) |
-| **Direct pg2** | 192.168.87.57 | 5432 | Direct connection (not recommended) |
-| **Direct pg3** | 192.168.87.66 | 5432 | Direct connection (not recommended) |
+| **Writes** | <CLUSTER_VIP> | 5000 | Always routes to PRIMARY |
+| **Reads** | <CLUSTER_VIP> | 5001 | Load balanced across STANDBYs (falls back to PRIMARY if all standbys down) |
+| **Direct pg1** | <PG1_IP> | 5432 | Direct connection (not recommended) |
+| **Direct pg2** | <PG2_IP> | 5432 | Direct connection (not recommended) |
+| **Direct pg3** | <PG3_IP> | 5432 | Direct connection (not recommended) |
 
 ## High Availability Features
 
@@ -113,14 +113,14 @@ Application → VIP:5001 → HAProxy → pgchk /replica check → STANDBY:5432
 
 | Scenario | Expected Recovery Time |
 |----------|----------------------|
-| Primary failure (automatic failover) | ~15-20 seconds |
+| Primary failure (automatic failover) | 15 seconds |
 | Standby failure | No impact to writes, reduced read capacity |
 | HAProxy failure on VIP holder | ~3 seconds (Keepalived failover) |
 | Network partition | Depends on configuration |
 
 ## Limitations
 
-1. **No automatic fencing**: Split-brain prevention relies on proper network configuration
+1. **No automatic fencing**: Split-brain prevention relies on proper network configuration. Fencing is the process of isolating a failed node to ensure it cannot resume as a primary and cause data divergence.
 2. **Single VIP**: All traffic routes through one node's HAProxy
 3. **Asynchronous replication**: Small data loss possible during failover (typically < 1 second of transactions)
 4. **No connection pooling**: Consider adding PgBouncer for high-connection workloads

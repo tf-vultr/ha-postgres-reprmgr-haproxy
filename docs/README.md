@@ -12,7 +12,7 @@ This documentation covers the deployment, operation, and maintenance of a highly
 - **Known Limitations**:
     - **Single VIP**: All traffic currently routes through a single floating IP, which can be a single point of failure if the underlying network infrastructure does not support high availability.
     - **Asynchronous Replication**: Default configuration is asynchronous; small data loss is possible during failover (typically < 1 second of transactions).
-    - **No Fencing**: Split-brain prevention currently relies on network configuration and unique constraints, automated fencing is **TBC**.
+    - **No Fencing**: Split-brain prevention currently relies on network configuration and unique constraints. Fencing (isolating a failed node to prevent it from re-joining as a primary) is **TBC**.
 
 ## Documentation Index
 
@@ -32,10 +32,10 @@ This documentation covers the deployment, operation, and maintenance of a highly
 
 ```bash
 # Write operations (connects to PRIMARY)
-psql -h 192.168.87.100 -p 5000 -U <username> -d <database>
+psql -h <CLUSTER_VIP> -p 5000 -U <username> -d <database>
 
 # Read operations (connects to STANDBY)
-psql -h 192.168.87.100 -p 5001 -U <username> -d <database>
+psql -h <CLUSTER_VIP> -p 5001 -U <username> -d <database>
 ```
 
 ### Check Cluster Health
@@ -55,7 +55,7 @@ sudo -u postgres repmgr standby switchover -f /etc/repmgr.conf --siblings-follow
 
 *Example topology:*
 ```
-                      VIP: 192.168.87.100
+                      VIP: <CLUSTER_VIP>
                              │
              ┌───────────────┼───────────────┐
              │               │               │

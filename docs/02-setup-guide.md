@@ -13,10 +13,10 @@ This guide covers the complete setup of a 3-node PostgreSQL HA cluster with auto
 ### Node Information (Example)
 | Node | Hostname | IP Address | Initial Role |
 |------|----------|------------|--------------|
-| 1 | pg1 | 192.168.87.54 | Primary |
-| 2 | pg2 | 192.168.87.57 | Standby |
-| 3 | pg3 | 192.168.87.66 | Standby |
-| VIP | - | 192.168.87.100 | Floating |
+| 1 | pg1 | <PG1_IP> | Primary |
+| 2 | pg2 | <PG2_IP> | Standby |
+| 3 | pg3 | <PG3_IP> | Standby |
+| VIP | - | <CLUSTER_VIP> | Floating |
 
 ---
 
@@ -102,11 +102,11 @@ Append to `/etc/postgresql/17/main/pg_hba.conf`:
 
 ```
 # Allow repmgr user database access
-host    repmgr          repmgr          192.168.87.0/24         trust
+host    repmgr          repmgr          <SUBNET>/24         trust
 host    repmgr          repmgr          127.0.0.1/32            trust
 
 # Allow replication connections
-host    replication     repmgr          192.168.87.0/24         trust
+host    replication     repmgr          <SUBNET>/24         trust
 host    replication     repmgr          127.0.0.1/32            trust
 ```
 
@@ -139,7 +139,7 @@ Create `/etc/repmgr.conf` on each node. Adjust `node_id`, `node_name`, and `host
 ```ini
 node_id=1
 node_name='pg1'
-conninfo='host=192.168.87.54 user=repmgr dbname=repmgr connect_timeout=2'
+conninfo='host=<PG1_IP> user=repmgr dbname=repmgr connect_timeout=2'
 data_directory='/var/lib/postgresql/17/main'
 use_replication_slots=yes
 monitoring_history=yes
@@ -162,9 +162,9 @@ reconnect_interval=5
 monitor_interval_secs=2
 ```
 
-**pg2**: Change `node_id=2`, `node_name='pg2'`, `host=192.168.87.57`
+**pg2**: Change `node_id=2`, `node_name='pg2'`, `host=<PG2_IP>`
 
-**pg3**: Change `node_id=3`, `node_name='pg3'`, `host=192.168.87.66`
+**pg3**: Change `node_id=3`, `node_name='pg3'`, `host=<PG3_IP>`
 
 ### 3.3 Register Primary (pg1 ONLY)
 
@@ -182,7 +182,7 @@ On each standby node:
 sudo systemctl stop postgresql
 
 # Clone from primary
-sudo -u postgres repmgr -h 192.168.87.54 -U repmgr -d repmgr \
+sudo -u postgres repmgr -h <PG1_IP> -U repmgr -d repmgr \
     -f /etc/repmgr.conf standby clone --force
 
 # Start PostgreSQL
@@ -321,9 +321,9 @@ listen pg_write
     option httpchk GET /master
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server pg1 192.168.87.54:5432 maxconn 100 check port 8008
-    server pg2 192.168.87.57:5432 maxconn 100 check port 8008
-    server pg3 192.168.87.66:5432 maxconn 100 check port 8008
+    server pg1 <PG1_IP>:5432 maxconn 100 check port 8008
+    server pg2 <PG2_IP>:5432 maxconn 100 check port 8008
+    server pg3 <PG3_IP>:5432 maxconn 100 check port 8008
 
 # Read traffic - routes to STANDBYs, falls back to PRIMARY if all standbys down
 frontend pg_read_fe
@@ -337,9 +337,9 @@ backend pg_read_replicas
     option httpchk GET /replica
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server pg1 192.168.87.54:5432 maxconn 100 check port 8008
-    server pg2 192.168.87.57:5432 maxconn 100 check port 8008
-    server pg3 192.168.87.66:5432 maxconn 100 check port 8008
+    server pg1 <PG1_IP>:5432 maxconn 100 check port 8008
+    server pg2 <PG2_IP>:5432 maxconn 100 check port 8008
+    server pg3 <PG3_IP>:5432 maxconn 100 check port 8008
 
 backend pg_read_fallback
     balance leastconn
@@ -376,7 +376,7 @@ sudo apt install -y keepalived
 ### 6.2 Identify Network Interface
 
 ```bash
-ip route get 192.168.87.57 | head -1
+ip route get <PG2_IP> | head -1
 # Note the interface name (e.g., enp0s2, eth0)
 ```
 
@@ -434,14 +434,14 @@ vrrp_instance VI_1 {
         auth_pass <STRONG_PASSWORD>
     }
 
-    unicast_src_ip 192.168.87.54
+    unicast_src_ip <PG1_IP>
     unicast_peer {
-        192.168.87.57
-        192.168.87.66
+        <PG2_IP>
+        <PG3_IP>
     }
 
     virtual_ipaddress {
-        192.168.87.100
+        <CLUSTER_VIP>
     }
 
     track_script {
@@ -454,9 +454,9 @@ vrrp_instance VI_1 {
 }
 ```
 
-**pg2 (Priority 100):** Change `priority 101` to `priority 100`, `unicast_src_ip` to `192.168.87.57`, and update `unicast_peer` to include `192.168.87.54` and `192.168.87.66`.
+**pg2 (Priority 100):** Change `priority 101` to `priority 100`, `unicast_src_ip` to `<PG2_IP>`, and update `unicast_peer` to include `<PG1_IP>` and `<PG3_IP>`.
 
-**pg3 (Priority 99):** Change `priority 101` to `priority 99`, `unicast_src_ip` to `192.168.87.66`, and update `unicast_peer` to include `192.168.87.54` and `192.168.87.57`.
+**pg3 (Priority 99):** Change `priority 101` to `priority 99`, `unicast_src_ip` to `<PG3_IP>`, and update `unicast_peer` to include `<PG1_IP>` and `<PG2_IP>`.
 
 **Key configuration choices:**
 - **`state BACKUP` on all nodes**: Uses election-based selection instead of static master
@@ -474,7 +474,7 @@ sudo systemctl start keepalived
 ### 6.6 Verify VIP
 
 ```bash
-ip addr show | grep 192.168.87.100
+ip addr show | grep <CLUSTER_VIP>
 
 # Check the notify log
 sudo cat /var/log/keepalived-notify.log
@@ -487,7 +487,7 @@ sudo cat /var/log/keepalived-notify.log
 ### 7.1 Test Write Connection via VIP
 
 ```bash
-psql -h 192.168.87.100 -p 5000 -U repmgr -d repmgr \
+psql -h <CLUSTER_VIP> -p 5000 -U repmgr -d repmgr \
     -c "SELECT inet_server_addr(), pg_is_in_recovery();"
 ```
 
@@ -496,7 +496,7 @@ Expected: Returns primary IP with `pg_is_in_recovery = f`
 ### 7.2 Test Read Connection via VIP
 
 ```bash
-psql -h 192.168.87.100 -p 5001 -U repmgr -d repmgr \
+psql -h <CLUSTER_VIP> -p 5001 -U repmgr -d repmgr \
     -c "SELECT inet_server_addr(), pg_is_in_recovery();"
 ```
 
@@ -512,7 +512,7 @@ sudo systemctl stop postgresql
 sudo -u postgres repmgr -f /etc/repmgr.conf cluster show
 
 # Verify writes still work via VIP
-psql -h 192.168.87.100 -p 5000 -U repmgr -d repmgr \
+psql -h <CLUSTER_VIP> -p 5000 -U repmgr -d repmgr \
     -c "SELECT inet_server_addr();"
 ```
 
@@ -601,7 +601,7 @@ In `config.json` under `SqlSettings`:
 ```json
 "ReplicaLagSettings": [
     {
-        "DataSource": "postgres://mattermost:mattermost@192.168.87.100:5000/mattermost?sslmode=disable&connect_timeout=10",
+        "DataSource": "postgres://mattermost:mattermost@<CLUSTER_VIP>:5000/mattermost?sslmode=disable&connect_timeout=10",
         "QueryAbsoluteLag": "select usename, pg_wal_lsn_diff(pg_current_wal_lsn(),replay_lsn) as metric from pg_stat_replication;",
         "QueryTimeLag": null
     }
