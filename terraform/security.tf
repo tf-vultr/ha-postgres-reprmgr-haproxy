@@ -77,6 +77,15 @@ resource "aws_security_group" "db_nodes" {
     cidr_blocks = [for s in data.aws_vpc.default.cidr_block_associations : s.cidr_block]
   }
 
+  # Postgres Exporter
+  ingress {
+    description = "Postgres Exporter from VPC"
+    from_port   = 9187
+    to_port     = 9187
+    protocol    = "tcp"
+    cidr_blocks = [for s in data.aws_vpc.default.cidr_block_associations : s.cidr_block]
+  }
+
   # --- Monitoring Access ---
   # Allow Monitor Node to scrape exporters
   ingress {
