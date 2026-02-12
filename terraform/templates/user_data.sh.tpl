@@ -142,6 +142,10 @@ log_directory = '/var/log/postgresql'
 log_filename = 'postgresql-%Y-%m-%d.log'
 log_file_mode = 0640
 
+# Performance & Vacuum Tuning
+checkpoint_timeout = '15min'
+log_autovacuum_min_duration = '250ms'
+
 EOF
 
 
