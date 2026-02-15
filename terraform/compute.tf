@@ -37,11 +37,12 @@ resource "aws_instance" "primary" {
   iam_instance_profile = aws_iam_instance_profile.db_profile.name
   user_data_replace_on_change = true
 
-  user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
+  # Use gzip compression to stay under 16KB limit
+  user_data_base64 = base64gzip(templatefile("${path.module}/templates/user_data.sh.tpl", {
     hostname        = "pg1"
     node_id         = 1
     primary_ip      = "127.0.0.1" # Not used on primary
-    
+
     ssh_private_key = tls_private_key.cluster_ssh.private_key_openssh
     ssh_public_key  = tls_private_key.cluster_ssh.public_key_openssh
     repmgr_password = var.repmgr_password
@@ -49,7 +50,7 @@ resource "aws_instance" "primary" {
     monitor_password = var.monitor_password
     mm_password     = var.mm_password
     vpc_cidrs       = join(",", [for assoc in data.aws_vpc.default.cidr_block_associations : assoc.cidr_block])
-  })
+  }))
 }
 
 resource "aws_instance" "standbys" {
@@ -77,11 +78,12 @@ resource "aws_instance" "standbys" {
   iam_instance_profile = aws_iam_instance_profile.db_profile.name
   user_data_replace_on_change = true
 
-  user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
+  # Use gzip compression to stay under 16KB limit
+  user_data_base64 = base64gzip(templatefile("${path.module}/templates/user_data.sh.tpl", {
     hostname        = "pg${count.index + 2}"
     node_id         = count.index + 2
     primary_ip      = aws_instance.primary.private_ip
-    
+
     ssh_private_key = tls_private_key.cluster_ssh.private_key_openssh
     ssh_public_key  = tls_private_key.cluster_ssh.public_key_openssh
     repmgr_password = var.repmgr_password
@@ -89,5 +91,5 @@ resource "aws_instance" "standbys" {
     monitor_password = var.monitor_password
     mm_password     = var.mm_password
     vpc_cidrs       = join(",", [for assoc in data.aws_vpc.default.cidr_block_associations : assoc.cidr_block])
-  })
+  }))
 }

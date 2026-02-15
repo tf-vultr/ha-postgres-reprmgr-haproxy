@@ -219,14 +219,26 @@ EOF
     
 else
     echo "I am STANDBY (Node $NODE_ID). Primay is at $PRIMARY_IP"
-    
-    # Poll for Primary availability AND repmgr user existence
-    # We use the repmgr user to check, ensuring the Primary has finished its bootstrap
+
+    # Poll for Primary availability AND repmgr full initialization
+    # Check not just that repmgr user exists, but that extension and tables are ready
     export PGPASSWORD='${repmgr_password}'
-    until psql -h $PRIMARY_IP -U repmgr -d repmgr -c "SELECT 1" >/dev/null 2>&1; do
-      echo "Waiting for Primary ($PRIMARY_IP) to be ready and repmgr user to exist..."
+
+    echo "Waiting for Primary to be fully initialized..."
+    RETRY_COUNT=0
+    MAX_RETRIES=60  # 5 minutes max wait (60 * 5 seconds)
+
+    until psql -h $PRIMARY_IP -U repmgr -d repmgr -c "SELECT 1 FROM repmgr.nodes WHERE type='primary' LIMIT 1" >/dev/null 2>&1; do
+      RETRY_COUNT=$((RETRY_COUNT + 1))
+      if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "ERROR: Primary did not initialize repmgr within 5 minutes. Aborting."
+        exit 1
+      fi
+      echo "Waiting for Primary ($PRIMARY_IP) repmgr extension and primary node registration... (attempt $RETRY_COUNT/$MAX_RETRIES)"
       sleep 5
     done
+
+    echo "Primary is ready with repmgr initialized!"
     unset PGPASSWORD
     
     systemctl stop postgresql
@@ -251,8 +263,28 @@ promote_command='repmgr standby promote -f /etc/repmgr.conf --log-to-file'
 follow_command='repmgr standby follow -f /etc/repmgr.conf --log-to-file --upstream-node-id=%n'
 EOF
 
-    # Clone
-    sudo -u postgres repmgr -h $PRIMARY_IP -U repmgr -d repmgr -f /etc/repmgr.conf standby clone --force
+    # Clone with retry logic
+    CLONE_RETRY_COUNT=0
+    CLONE_MAX_RETRIES=3
+
+    while [ $CLONE_RETRY_COUNT -lt $CLONE_MAX_RETRIES ]; do
+      echo "Attempting standby clone (attempt $((CLONE_RETRY_COUNT + 1))/$CLONE_MAX_RETRIES)..."
+
+      if sudo -u postgres repmgr -h $PRIMARY_IP -U repmgr -d repmgr -f /etc/repmgr.conf standby clone --force; then
+        echo "Standby clone successful!"
+        break
+      else
+        CLONE_RETRY_COUNT=$((CLONE_RETRY_COUNT + 1))
+        if [ $CLONE_RETRY_COUNT -lt $CLONE_MAX_RETRIES ]; then
+          echo "Clone failed, retrying in 10 seconds..."
+          rm -rf /var/lib/postgresql/17/main/*
+          sleep 10
+        else
+          echo "ERROR: Failed to clone from primary after $CLONE_MAX_RETRIES attempts"
+          exit 1
+        fi
+      fi
+    done
 
     # Wait for service to be active after clone
     systemctl restart postgresql
@@ -261,7 +293,27 @@ EOF
       sleep 2
     done
 
-    sudo -u postgres repmgr -f /etc/repmgr.conf standby register
+    # Register with retry
+    REGISTER_RETRY_COUNT=0
+    REGISTER_MAX_RETRIES=3
+
+    while [ $REGISTER_RETRY_COUNT -lt $REGISTER_MAX_RETRIES ]; do
+      echo "Attempting standby registration (attempt $((REGISTER_RETRY_COUNT + 1))/$REGISTER_MAX_RETRIES)..."
+
+      if sudo -u postgres repmgr -f /etc/repmgr.conf standby register; then
+        echo "Standby registration successful!"
+        break
+      else
+        REGISTER_RETRY_COUNT=$((REGISTER_RETRY_COUNT + 1))
+        if [ $REGISTER_RETRY_COUNT -lt $REGISTER_MAX_RETRIES ]; then
+          echo "Registration failed, retrying in 5 seconds..."
+          sleep 5
+        else
+          echo "ERROR: Failed to register standby after $REGISTER_MAX_RETRIES attempts"
+          exit 1
+        fi
+      fi
+    done
 fi
 
 # Enable Repmgrd

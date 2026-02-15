@@ -107,7 +107,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${grafana_password}
     restart: unless-stopped
 EOF
 

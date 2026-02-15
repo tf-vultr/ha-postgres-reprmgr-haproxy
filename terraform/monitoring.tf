@@ -1,5 +1,11 @@
 # --- Monitoring Node (Prometheus + Grafana) ---
 
+resource "random_password" "grafana_admin_password" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+
 resource "aws_security_group" "monitor_sg" {
   name        = "ha-postgres-monitor-sg"
   description = "Security group for Monitoring Node"
@@ -69,7 +75,7 @@ resource "aws_instance" "monitor" {
   })
 
   user_data = templatefile("${path.module}/templates/user_data_monitor.sh.tpl", {
-    # Variables if needed
+    grafana_password = random_password.grafana_admin_password.result
   })
 }
 

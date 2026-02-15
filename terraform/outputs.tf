@@ -36,6 +36,11 @@ output "metrics_endpoints" {
   }
 }
 
+output "grafana_admin_password" {
+  description = "Admin password for Grafana"
+  value       = nonsensitive(random_password.grafana_admin_password.result)
+}
+
 # 4. App Configuration
 output "app_configuration" {
   description = "Configuration for Applications (Mattermost)"
