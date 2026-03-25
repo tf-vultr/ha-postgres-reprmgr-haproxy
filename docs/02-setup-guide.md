@@ -22,6 +22,28 @@ This guide covers the complete setup of a 3-node PostgreSQL HA cluster with auto
 
 ## Phase 1: Base Installation (All Nodes)
 
+### 1.0 Configure /etc/hosts on All Nodes
+
+Before proceeding with any installation, configure `/etc/hosts` on **every node** so that hostnames `pg1`, `pg2`, and `pg3` resolve correctly. All subsequent steps (SSH key distribution, repmgr configuration, HAProxy health checks) depend on these hostnames being resolvable.
+
+Append to `/etc/hosts` on each node:
+
+```
+<PG1_IP>  pg1
+<PG2_IP>  pg2
+<PG3_IP>  pg3
+```
+
+Verify resolution on each node:
+
+```bash
+ping -c 1 pg1
+ping -c 1 pg2
+ping -c 1 pg3
+```
+
+All three should resolve to the correct IP addresses.
+
 ### 1.1 Install PostgreSQL 17
 
 ```bash
@@ -51,7 +73,14 @@ sudo chmod 0440 /etc/sudoers.d/postgres_ctl
 
 ### 1.3 Configure SSH Access for postgres User
 
-On each node, set up passwordless SSH for the postgres user:
+On each node, set up passwordless SSH for the postgres user. The `ssh-copy-id` command requires password authentication to deposit the key, so first set a temporary password for the `postgres` OS user on all three nodes:
+
+```bash
+# On each node, set a temporary password for the postgres OS user
+sudo passwd postgres
+```
+
+Then, on each node, generate a key and distribute it:
 
 ```bash
 # Switch to postgres user
@@ -60,15 +89,22 @@ sudo su - postgres
 # Generate SSH key (accept defaults)
 ssh-keygen -t ed25519 -N ""
 
-# Copy public key to all other nodes
+# Copy public key to all other nodes (use the temporary password when prompted)
 ssh-copy-id postgres@pg1
 ssh-copy-id postgres@pg2
 ssh-copy-id postgres@pg3
 
 # Test connectivity
-ssh postgres@pg1 hostname
-ssh postgres@pg2 hostname
-ssh postgres@pg3 hostname
+ssh postgres@pg1
+ssh postgres@pg2
+ssh postgres@pg3
+```
+
+Once SSH keys are working on all nodes, lock the password for security:
+
+```bash
+# On each node (as your sudo user, not postgres)
+sudo passwd -l postgres
 ```
 
 ---
@@ -173,7 +209,53 @@ sudo -u postgres repmgr -f /etc/repmgr.conf primary register
 sudo -u postgres repmgr -f /etc/repmgr.conf cluster show
 ```
 
-### 3.4 Clone and Register Standbys (pg2 and pg3)
+### 3.4 Verify Firewall Rules
+
+Before cloning standbys, ensure the firewall allows inter-node communication. These ports are required throughout the cluster lifecycle — open them all now to avoid issues in later phases.
+
+**Between database nodes (pg1, pg2, pg3):**
+
+| Port | Service |
+|------|---------|
+| 5432 | PostgreSQL (replication + client connections) |
+| 8008 | pgchk.py (HAProxy health checks) |
+
+**From HAProxy/LB node to database nodes:**
+
+| Port | Service |
+|------|---------|
+| 5432 | PostgreSQL (proxied client connections) |
+| 8008 | pgchk.py (health checks to determine primary/replica) |
+
+**From application servers to HAProxy/LB node:**
+
+| Port | Service |
+|------|---------|
+| 5000 | HAProxy write port (routes to primary) |
+| 5001 | HAProxy read port (routes to standbys) |
+
+**From monitoring node to all nodes:**
+
+| Port | Service |
+|------|---------|
+| 9100 | Node Exporter (system metrics) |
+| 9187 | Postgres Exporter (database metrics, DB nodes only) |
+
+If using `ufw` on the database nodes:
+
+```bash
+# On each database node, allow traffic from the other DB nodes and HAProxy
+sudo ufw allow from <PG1_IP> to any port 5432,8008 proto tcp
+sudo ufw allow from <PG2_IP> to any port 5432,8008 proto tcp
+sudo ufw allow from <PG3_IP> to any port 5432,8008 proto tcp
+sudo ufw allow from <HAPROXY_IP> to any port 5432,8008 proto tcp
+sudo ufw allow from <MONITOR_IP> to any port 9100,9187 proto tcp
+sudo ufw reload
+```
+
+If the firewall is managed externally (e.g., VMware NSX, network security groups), ensure the equivalent rules are in place before proceeding.
+
+### 3.5 Clone and Register Standbys (pg2 and pg3)
 
 On each standby node:
 
@@ -192,7 +274,7 @@ sudo systemctl start postgresql
 sudo -u postgres repmgr -f /etc/repmgr.conf standby register
 ```
 
-### 3.5 Verify Cluster
+### 3.6 Verify Cluster
 
 ```bash
 sudo -u postgres repmgr -f /etc/repmgr.conf cluster show
@@ -207,7 +289,7 @@ Expected output:
  3  | pg3  | standby |   running | pg1      | default  | 100      | 1
 ```
 
-### 3.6 Start repmgrd Daemon (All Nodes)
+### 3.7 Start repmgrd Daemon (All Nodes)
 
 Create `/etc/systemd/system/repmgrd.service`:
 
@@ -346,9 +428,9 @@ backend pg_read_fallback
     option httpchk GET /ready
     http-check expect status 200
     default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
-    server pg1 192.168.87.54:5432 maxconn 100 check port 8008
-    server pg2 192.168.87.57:5432 maxconn 100 check port 8008
-    server pg3 192.168.87.66:5432 maxconn 100 check port 8008
+    server pg1 <PG1_IP>:5432 maxconn 100 check port 8008
+    server pg2 <PG2_IP>:5432 maxconn 100 check port 8008
+    server pg3 <PG3_IP>:5432 maxconn 100 check port 8008
 ```
 
 **How the read fallback works:**
@@ -423,7 +505,7 @@ vrrp_script chk_haproxy {
 
 vrrp_instance VI_1 {
     state BACKUP
-    interface enp0s2
+    interface <NETWORK_INTERFACE>   # e.g., eth0, ens160, enp0s2 — use `ip -br addr` to find yours
     virtual_router_id 51
     priority 101
     advert_int 1
@@ -431,7 +513,7 @@ vrrp_instance VI_1 {
 
     authentication {
         auth_type PASS
-        auth_pass <STRONG_PASSWORD>
+        auth_pass <VRRP_PASSWORD>   # Shared secret between keepalived peers (max 8 chars). Must be identical on all nodes.
     }
 
     unicast_src_ip <PG1_IP>
@@ -545,10 +627,37 @@ sudo apt install -y prometheus-node-exporter
 wget -q https://github.com/prometheus-community/postgres_exporter/releases/download/v0.19.0/postgres_exporter-0.19.0.linux-amd64.tar.gz
 tar xf postgres_exporter-0.19.0.linux-amd64.tar.gz
 sudo cp postgres_exporter-0.19.0.linux-amd64/postgres_exporter /usr/bin/prometheus-postgres-exporter
+```
 
-# Create systemd service if not present (apt usually creates this, but manual install does not)
-# If upgrading from apt version, simply restart the service:
-# sudo systemctl restart prometheus-postgres-exporter
+Since we installed the binary manually (not via `apt`), we need to create the systemd unit file.
+
+Create `/etc/systemd/system/prometheus-postgres-exporter.service`:
+
+```ini
+[Unit]
+Description=Prometheus PostgreSQL Exporter
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=postgres
+Group=postgres
+EnvironmentFile=/etc/default/prometheus-postgres-exporter
+ExecStart=/usr/bin/prometheus-postgres-exporter \
+    --web.listen-address=:9187 \
+    --extend.query-path=/etc/postgres-exporter/metrics_queries.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable prometheus-postgres-exporter
 ```
 
 ### 8.2 Configure Postgres Exporter
@@ -562,10 +671,42 @@ The exporter needs a user with monitoring privileges.
 2.  **Configure Exporter** (Execute on **All Nodes**):
     Edit `/etc/default/prometheus-postgres-exporter`:
     ```ini
-    DATA_SOURCE_NAME="postgresql://postgres_exporter:password@localhost:5432/postgres?sslmode=disable"
+    DATA_SOURCE_NAME="postgresql://postgres_exporter:<EXPORTER_PASSWORD>@localhost:5432/postgres?sslmode=disable"
+    PG_EXPORTER_EXTEND_QUERY_PATH="/etc/postgres-exporter/metrics_queries.yaml"
     ```
 
-3.  **Restart Service**:
+3.  **Create Custom Metrics Queries** (Execute on **All Nodes**):
+
+    ```bash
+    sudo mkdir -p /etc/postgres-exporter
+    ```
+
+    Create `/etc/postgres-exporter/metrics_queries.yaml`:
+    ```yaml
+    pg_replication_lag_detailed:
+      query: "SELECT client_addr, application_name, state, EXTRACT(EPOCH FROM write_lag) as write_lag_seconds, EXTRACT(EPOCH FROM flush_lag) as flush_lag_seconds, EXTRACT(EPOCH FROM replay_lag) as replay_lag_seconds FROM pg_stat_replication"
+      metrics:
+        - client_addr:
+            usage: "LABEL"
+            description: "Replica Address"
+        - application_name:
+            usage: "LABEL"
+            description: "Replica Application Name"
+        - state:
+            usage: "LABEL"
+            description: "Replica State"
+        - write_lag_seconds:
+            usage: "GAUGE"
+            description: "Time waiting for WAL to be sent"
+        - flush_lag_seconds:
+            usage: "GAUGE"
+            description: "Time waiting for WAL to be flushed to disk"
+        - replay_lag_seconds:
+            usage: "GAUGE"
+            description: "Time waiting for WAL to be replayed"
+    ```
+
+4.  **Restart Service**:
     ```bash
     sudo systemctl restart prometheus-postgres-exporter
     ```
@@ -573,15 +714,15 @@ The exporter needs a user with monitoring privileges.
 ### 8.3 Enable HAProxy Stats
 To visualize HAProxy metrics, enable the statistics endpoint on each node.
 
-Edit `/etc/haproxy/haproxy.cfg` and append to the `global` or `defaults` section, or add as a new listener:
+Edit `/etc/haproxy/haproxy.cfg` and add the following as a **top-level block** (e.g., between `global` and `defaults`). Do not nest it inside `global` or `defaults`:
 
 ```haproxy
 listen stats
+    mode http
     bind *:8404
     stats enable
     stats uri /metrics
     stats refresh 10s
-    stats admin if LOCAL
 ```
 
 Restart HAProxy:
@@ -594,7 +735,7 @@ sudo systemctl restart haproxy
 ## Phase 9: Mattermost Configuration
 
 ### 9.1 Replica Lag Settings
-To enable the "Replica Lag" panel in the Mattermost Performance Dashboard, configure `ReplicaLagSettings` in `config.json`. This should point to the **Write VIP** (`192.168.87.100`) so it can query the primary for replication status.
+To enable the "Replica Lag" panel in the Mattermost Performance Dashboard, configure `ReplicaLagSettings` in `config.json`. This should point to the **Write VIP** (`<CLUSTER_VIP>`) so it can query the primary for replication status.
 
 In `config.json` under `SqlSettings`:
 
